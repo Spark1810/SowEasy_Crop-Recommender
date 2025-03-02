@@ -3,11 +3,13 @@ import pandas as pd
 import random
 import pickle
 from PIL import Image
+import time
 
 LogReg_model=pickle.load(open('LogReg_model.pkl','rb'))
 DecisionTree_model=pickle.load(open('DecisionTree_model.pkl','rb'))
 NaiveBayes_model=pickle.load(open('NaiveBayes_model.pkl','rb'))
 RF_model=pickle.load(open('RF_model.pkl','rb'))
+
 
 data = {
     'Nitrogen': [37, 12, 7, 22, 35, 12, 9, 41, 21, 9, 13, 14, 36, 24, 14, 10, 38, 21, 39, 13, 10, 12, 11, 36, 13, 23, 9, 38, 12, 14, 24, 12, 39, 7, 23, 41, 8, 12, 15, 15, 13, 10, 22, 35, 10, 8, 12, 24, 41, 5, 23, 13, 40, 12, 11, 23, 38, 8, 11, 15, 36, 13, 24, 5, 37, 15, 9, 8, 6, 10, 21, 39, 23, 42, 13, 9, 22, 10, 7, 14, 10, 41, 14, 11, 21, 8, 13, 35, 12, 11, 8, 6, 41, 9, 24, 4, 39, 15, 12],
@@ -19,14 +21,46 @@ data = {
 # Convert to DataFrame
 df = pd.DataFrame(data)
 
+# Security
+#passlib,hashlib,bcrypt,scrypt
+import hashlib
+def make_hashes(password):
+        return hashlib.sha256(str.encode(password)).hexdigest()
+
+def check_hashes(password,hashed_text):
+        if make_hashes(password) == hashed_text:
+                return hashed_text
+        return False
+
+# DB Management
+import sqlite3 
+conn = sqlite3.connect('data.db')
+c = conn.cursor()
+# DB  Functions
+def create_usertable():
+        c.execute('CREATE TABLE IF NOT EXISTS userstable(username TEXT,password TEXT)')
+
+
+def add_userdata(username,password):
+        c.execute('INSERT INTO userstable(username,password) VALUES (?,?)',(username,password))
+        conn.commit()
+
+def login_user(username,password):
+        c.execute('SELECT * FROM userstable WHERE username =? AND password = ?',(username,password))
+        data = c.fetchall()
+        return data
+
+
+def view_all_users():
+        c.execute('SELECT * FROM userstable')
+        data = c.fetchall()
+        return data
+
 def classify(answer):
     return answer[0]+" is the best crop for cultivation here."
 
 
-def main():
-    st.title("SowEasy - Smart Fertilizer And Crop Recommender System")
-    image=Image.open('cc.jpg')
-    st.image(image)
+def pert():
     html_temp = """
     <div style="background-color:teal; padding:10px">
     <h2 style="color:white;text-align:center;">Find The Most Suitable Fertilizer and Crop for Your Land</h2>
@@ -56,7 +90,7 @@ def main():
         if not matching_fertilizer.empty:
             fertilizer_name = matching_fertilizer['Fertilizer Name'].values[0]
         else:
-            fertilizer_name = (df['Fertilizer Name'].values[20])
+            fertilizer_name = (df['Fertilizer Name'].values[6])
 
         st.success(f'The Recommended Fertilizer is {fertilizer_name}')
 
@@ -71,6 +105,83 @@ def main():
         else:
             st.info(classify(RF_model.predict(inputs)))   
 
+def main():
 
-if __name__=='__main__':
-    main()
+        st.markdown("<h1 style='text-align: center; color: green;'>SowEasy</h1>", unsafe_allow_html=True)
+        st.markdown("<h4 style='text-align: center; color: green;'>Intelligent Fertilizer & Crop Recommendation System</h4>", unsafe_allow_html=True)
+
+        menu = ["HOME","ADMIN LOGIN","USER LOGIN","SIGN UP","ABOUT US"]
+        choice = st.sidebar.selectbox("Menu",menu)
+
+
+        if choice == "HOME":
+                st.markdown("<h1 style='text-align: center;'>HOMEPAGE</h1>", unsafe_allow_html=True)
+                image = Image.open(r"cc.jpg")
+                st.image(image, caption='',use_column_width=True)
+                st.subheader(" ")
+                time.sleep(3)
+                st.warning("Goto Menu Section To Login !")
+
+
+
+        elif choice == "ADMIN LOGIN":
+                 st.markdown("<h1 style='text-align: center;'>Admin Login Section</h1>", unsafe_allow_html=True)
+                 user = st.sidebar.text_input('Username')
+                 passwd = st.sidebar.text_input('Password',type='password')
+                 if st.sidebar.checkbox("LOGIN"):
+
+                         if user == "Admin" and passwd == 'admin123':
+
+                                                st.success("Logged In as {}".format(user))
+                                                task = st.selectbox("Task",["Home","Profiles"])
+
+                                                if task == "Profiles":
+                                                        st.subheader("User Profiles")
+                                                        user_result = view_all_users()
+                                                        clean_db = pd.DataFrame(user_result,columns=["Username","Password"])
+                                                        st.dataframe(clean_db)
+                                                else:
+                                                       pert()
+                         else:
+                                st.warning("Incorrect Admin Username/Password")
+
+        elif choice == "USER LOGIN":
+                st.markdown("<h1 style='text-align: center;'>User Login Section</h1>", unsafe_allow_html=True)
+                username = st.sidebar.text_input("User Name")
+                password = st.sidebar.text_input("Password",type='password')
+                if st.sidebar.checkbox("LOGIN"):
+                        # if password == '12345':
+                        create_usertable()
+                        hashed_pswd = make_hashes(password)
+
+                        result = login_user(username,check_hashes(password,hashed_pswd))
+                        if result:
+
+                                st.success("Logged In as {}".format(username))
+                                pert()
+
+                        else:
+                                st.warning("Incorrect Username/Password")
+                                st.warning("Please Create an Account if not Created")
+
+
+
+
+
+        elif choice == "SIGN UP":
+                st.subheader("Create New Account")
+                new_user = st.text_input("Username")
+                new_password = st.text_input("Password",type='password')
+
+                if st.button("SIGN UP"):
+                        create_usertable()
+                        add_userdata(new_user,make_hashes(new_password))
+                        st.success("You have successfully created a valid Account")
+                        st.info("Go to User Login Menu to login")
+
+        elif choice == "ABOUT US":
+                st.header("CREATED BY _**Udantika**_")
+
+
+
+main()
